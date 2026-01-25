@@ -1,0 +1,1 @@
+{"base": 210, "input_labels": ["a", "b"], "target_labels": ["k"], "block_size": 11, "generation_size": 3, "name": "Baseline_1e4_m1e7_b210", "num_samples": 10240000}

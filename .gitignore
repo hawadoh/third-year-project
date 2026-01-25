@@ -163,5 +163,21 @@ cython_debug/
 wandb/
 *.bin
 *.npz
-*.json
 *.pt
+
+# macOS
+.DS_Store
+
+# Training logs (reproducible)
+logs/
+logs-mps/
+training/logs/
+
+# Generated figures (keep source scripts)
+annotation.png
+annotation.pdf
+docs/images/
+
+# Private files
+docs/*meeting.md
+CLAUDE.md

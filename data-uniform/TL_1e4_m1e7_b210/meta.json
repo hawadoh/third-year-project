@@ -1,0 +1,1 @@
+{"base": 210, "input_labels": ["a", "b"], "target_labels": ["k", "u", "v"], "block_size": 18, "generation_size": 11, "name": "TL_1e4_m1e7_b210", "num_samples": 1000}

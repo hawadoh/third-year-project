@@ -1,173 +1,158 @@
-[![arXiv](https://img.shields.io/badge/arXiv-2405.15722-pink.svg)](https://arxiv.org/abs/2405.15722)
-[![Models](https://img.shields.io/badge/Models-10.5281/zenodo.12752192-blue.svg)](https://zenodo.org/records/12752192)
-[![Data](https://img.shields.io/badge/Data-10.5281/zenodo.12751514-blue.svg)](https://zenodo.org/records/12751514)
-# Self-Proving Models
+# Self-Proving Models: Reproduction and Extension
 
-Self-Proving Models prove the correctness of their outputs to a verifier using an Interactive Proof System.
-This repository includes tools to train these models, specifically for the Greatest Common Divisor (GCD) problem,
-based on the theory described in our [paper](https://arxiv.org/abs/2405.15722).
+**CS310 Third Year Project** - University of Warwick
+Howard Cheung (5514611) | Supervised by Dr. Matthias C. Caro
 
-This repository provides:
-- A straightforward framework for training a Self-Proving GPT.
-- Data generation scripts for the GCD problem.
-- Scripts for reproducing experiments from the [paper](https://arxiv.org/abs/2405.15722).
+## Overview
 
+Self-proving models are neural networks that output verifiable proofs alongside their answers, transforming average-case correctness guarantees into per-input certificates. This project reproduces and extends the self-proving framework from [Amit et al. (2024)](https://arxiv.org/abs/2405.15722).
+
+**Term 1 accomplishments:**
+- Reproduced Figure 2 from the original paper with improved training stability (smaller error bars across seeds)
+- Discovered a distribution mismatch: models trained on log-uniform inputs fail to generalise to uniformly sampled inputs
+
+**Planned extensions (Term 2):**
+- Tournament GCD: extend the framework to compute GCD of n > 2 inputs using a binary tree structure
+- Investigate the distribution generalisation question
+- Explore extensions to problems in NP
 
 ## Setup
 
-1. Create a new conda environment (recommended):
+1. Create a conda environment:
 ```bash
 conda create -n spm python=3.12
 conda activate spm
 ```
-2. Clone the repository:
+
+2. Install the package:
 ```bash
-git clone https://github.com/orrp/self-proving-models.git 
-```
-3. Install the package:
-```bash
-cd self-proving-models
 pip install -e .
 ```
 
-## Data
-You can download pre-generated [![Data](https://img.shields.io/badge/Data-blue.svg)](https://zenodo.org/records/12751514), and extract it to the `data/` directory.
-To generate this data yourself, run
+## Data Generation
+
+### Log-uniform distribution (original)
+
+Generate training data with log-uniform sampling (as in the original paper):
 ```bash
 python spm/data/generate_data.py
 ```
 
-This populates the `data/` directory with Transcripts and Annotated Transcripts
-of interactions between an honest prover and the verifier.
+This populates `data/` with Transcripts and Annotated Transcripts. Dataset naming convention:
+```
+TL_{UPPER_BOUND}_m{NUM_SAMPLES}_b{BASE}      # Transcript Learning
+ATL{DEPTH}_{UPPER_BOUND}_m{NUM_SAMPLES}_b{BASE}  # Annotated Transcript Learning
+```
 
-Transcript datasets are named according to the following convention:
+### Uniform distribution (new)
+
+Generate evaluation data with uniform sampling for distribution comparison:
+```bash
+python data-uniform/generate_uniform_data.py
 ```
-TL_{UPPER_BOUND}_m{NUM_TRAIN_SAMPLES}_b{BASE_OF_REPRESENTATION}
-```
-For Annotated Transcripts, `TL` is replaced with `ATL{ANNOTATION_LENGTH}`.
+
+This creates `data-uniform/` with evaluation sets for all dataset types (Baseline, TL, ATL2-7).
 
 ## Training
-Once `data/` is populated, you can train a Self-Proving GPT via Transcript Learning:
-```bash
-python spm/train.py --data DATASET_NAME
-```
-where `DATASET_NAME` is the name of the dataset you want to use.
-### Example
-To train on about 10 million samples with an upper bound of 10,000 encoded in base 210:
-```bash
-python spm/train.py --data TL_1e4_m1e7_b210
-```
-### Useful arguments
-- `--help`: Show all arguments.
-- `--device DEVICE`: Specify the device to train on (`cpu` or `cuda`).
-- `--epochs EPOCHS`: Number of epochs to train. Each epoch looks at a number of samples equal to the dataset size.
-- `--data DATA, -d DATA`: Name of the dataset to use.
-- `--seed SEED`: Set random seed
-- `--save_iters SAVE_ITERS [SAVE_ITERS ...]`:
-    Save model at these iterations. -1 For the last iteration. None to disable.
-    Checkpoints are saved to `models/` as:
-`{N_LAYERS}x{N_HEAD}x{DIM_EMBED}x{N_ITERATIONS}_{DATASET_NAME}_iter{ITERATION}.pt`
-- `--load_ckpt LOAD_CKPT`: Load model from checkpoint (name).
- When you load a model, specify the checkpont name as described above (not the full path).
-- `--wandb`: Enable tracking with [Weights & Biases](https://wandb.ai/).
-Use `--wandb_proj WANDB_PROJ` to specify the project name.
 
-## Reproducing results from the paper
-Once you [obtain data](#data), you can train models on the datasets to reproduce the experimental
-section of the [paper](https://arxiv.org/abs/2405.15722).
-
-### Annotation length
-To reproduce the ablation on the annotation length, run
+### Local training
 ```bash
-./runs/annot_len.sh
-```
-Logs of these runs will be saved at `logs/`. The Figure 2 can be generated with
-```bash
-./figs/annotation.py        # Fig 2
+python spm/train.py --data TL_1e4_m1e7_b210 --device cuda
 ```
 
-### Base of representation
-The [paper](https://arxiv.org/abs/2405.15722) shows that the number of unique primes in the base of representation
-determines Verifiability of the model. This ablation requires generating many different datasets (one for each base).
-For convenience, there is a script that first samples a random base with a given number of unique primes in its
-factorization, then trains a model and deletes the dataset.
+Useful arguments:
+- `--device DEVICE`: `cpu`, `cuda`, or `mps` (Apple Silicon)
+- `--epochs EPOCHS`: Number of training epochs
+- `--seed SEED`: Random seed for reproducibility
+- `--save_iters N [N ...]`: Save checkpoints at these iterations
+- `--wandb`: Enable Weights & Biases logging
+
+### DCS Batch Compute System
+
+For training on Warwick's DCS cluster with SLURM:
 ```bash
-python spm/train_diff_bases.py --num_unique_primes NUM_UNIQUE_PRIMES --seed SEED
+cd training/
+./submit_training.sh
 ```
 
-Run this script for twenty seeds. *Tip: You can use a [WandB sweep](https://docs.wandb.ai/guides/sweeps)
-to easily  schedule runs from different machines, and then aggregate the results onto your local machine
-for plotting.
-Use `wandb sweep runs/diff_bases.yaml` to create the sweep.*
+See `training/README.md` and `dcs-docs/` for detailed instructions on batch job submission.
 
-Each run will be logged to `logs/diff_bases/`.
-You can then generate the  figure with
+### Reproduce Figure 2 (annotation length ablation)
 ```bash
-./figs/diff_bases.py  # Fig 3
+./runs/annot_len.sh           # Train all annotation lengths
+python figs/annotation.py     # Generate figure
 ```
 
-## Citation
-If you use Self-Proving Models or components of this codebase in your research, please cite the following paper:
-```latex
-@article{AGPR2024,
-  author       = {Noga Amit and
-                  Shafi Goldwasser and
-                  Orr Paradise and
-                  Guy N. Rothblum},
-  title        = {Models That Prove Their Own Correctness},
-  journal      = {CoRR},
-  volume       = {abs/2405.15722},
-  year         = {2024},
-  url          = {https://doi.org/10.48550/arXiv.2405.15722},
-  doi          = {10.48550/ARXIV.2405.15722},
-  eprinttype    = {arXiv},
-  eprint       = {2405.15722},
-  timestamp    = {Wed, 19 Jun 2024 08:52:57 +0200},
-  biburl       = {https://dblp.org/rec/journals/corr/abs-2405-15722.bib},
-  bibsource    = {dblp computer science bibliography, https://dblp.org}
-}
+### Reproduce Figure 3 (base of representation)
+```bash
+python spm/train_diff_bases.py --num_unique_primes NUM --seed SEED
+python figs/diff_bases.py     # Generate figure
+```
+
+## Inference & Evaluation
+
+### Batch inference
+```bash
+python tests/inference/inference.py
+```
+
+### Interactive testing
+```bash
+python tests/inference/interactive_inference.py
+```
+
+## Project Structure
+
+```
+spm/                    # Main package
+  train.py              # Training entry point
+  train_diff_bases.py   # Training with different bases
+  utils.py              # Utilities (extended Euclidean algorithm)
+  data/                 # Data generation and representation
+    generate_data.py    # Dataset generation
+    samplers.py         # GCD samplers (log-uniform, uniform)
+    samples.py          # Sample, Transcript, AnnotatedTranscript classes
+    str_repr.py         # String encoding (base conversion)
+    tensor_repr.py      # Tensor representation for training
+  gpt/                  # GPT model (adapted from nanoGPT)
+    model.py            # Model architecture
+    trainer.py          # Training loop
+    config.py           # Configuration
+
+data-uniform/           # Uniform distribution eval data
+  generate_uniform_data.py
+
+training/               # DCS batch compute scripts
+  submit_*.sh           # SLURM submission scripts
+  train_job.sbatch      # SLURM job template
+
+tests/                  # Tests and inference
+  inference/            # Inference scripts
+
+figs/                   # Figure generation scripts
+docs/                   # Documentation and reports
+dcs-docs/               # DCS-specific guides
 ```
 
 ## Acknowledgements
-This codebase adapts Andrej Karpathy's [nanoGPT](https://www.github.com/karpathy/nanoGPT) as its GPT implementation.
-The model can be found in `self-proving-models/gpt/`. Cassidy Laidlaw's
-[boilerplate](https://github.com/cassidylaidlaw/python-boilerplate)
-was used for repo structure and linting (`self-proving-models/lint.sh`).
 
-## Contribution
-Contributions are welcome! Please open an [issue](https://www.github.com/orrp/self-proving-models/issues)
-or a [pull request](https://www.github.com/orrp/self-proving-models/pulls).
+This project is based on the [official repository](https://github.com/orrp/self-proving-models) by Amit et al. The GPT implementation is adapted from Andrej Karpathy's [nanoGPT](https://github.com/karpathy/nanoGPT).
 
-To install the package in development mode, run
-```bash
-pip install -e '.[dev]'
-ln -s post-commit.sh .git/hooks/post-commit
+The authors acknowledge the use of the Batch Compute System in the Department of Computer Science at the University of Warwick, and associated support services, in the completion of this work.
+
+## Citation
+
+If you use this work, please cite the original paper:
+```bibtex
+@article{AGPR2024,
+  author    = {Noga Amit and Shafi Goldwasser and Orr Paradise and Guy N. Rothblum},
+  title     = {Models That Prove Their Own Correctness},
+  journal   = {CoRR},
+  volume    = {abs/2405.15722},
+  year      = {2024},
+  url       = {https://doi.org/10.48550/arXiv.2405.15722},
+  doi       = {10.48550/ARXIV.2405.15722},
+  eprinttype = {arXiv},
+  eprint    = {2405.15722},
+}
 ```
-The last command sets up a git hook to copy the git hash in `spm/__init__.py`. This hash is
-then logged by WandB for reproducibility. This is useful when experiments are run from a server to which code is
-deployed from a local machine (not via git).
-
-### Package structure
-
-**Root `spm/`**
-- `train.py`: Main entry point for training models.
-- `train_diff_bases.py`: Alternative entry point for training models on datasets with different bases of representation.
-                         Generates and cleans up datasets automatically.              
-- `utils.py`: Common utilities (e.g. implementation of the extended Euclidean algorithm).
-- `__init__.py`: Common paths and constants.
-- `systematic_models.py`: Systematic models for the GCD problem, useful for testing.
-
-**Data `spm/data/`**
-- `generate_data.py`: Generates datasets for training.
-- `samples.py`: The `Samples` represents a dataset of input-output sequences to the GCD problem.
-                `Transcripts` add a proof (Bézout coefficients) to the samples.
-                `AnnotatedTranscripts` add a proof and its annotation.
-- `samplers.py`: Samplers for generating `Samples`, `Transcripts`, and `AnnotatedTranscripts`.
-- `str_repr.py`: A string representation of data samples (encoded in a given base).
-- `tensor_repr.py`: A tensor representation of data samples. Uses `str_repr` to encode samples as strings, and
-                    handles delimiters and padding. Contains utility methods for encoding, decoding, and saving.
-
-**Model `spm/gpt/`**
-- `model.py`: Defines the GPT model architecture. An object-oriented adaptation of [nanoGPT](https://www.github.com/karpathy/nanoGPT).
-- `trainer.py`: Trainer for GPT models. Handles training, evaluation, and logging.
-- `config.py`: Config for a trainer.

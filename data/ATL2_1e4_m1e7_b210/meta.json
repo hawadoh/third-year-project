@@ -1,0 +1,1 @@
+{"base": 210, "input_labels": ["a", "b"], "target_labels": ["k", "u0", "v0", "q0", "u1", "v1", "u", "v"], "block_size": 35, "generation_size": 28, "name": "ATL2_1e4_m1e7_b210", "num_samples": 10240000}
