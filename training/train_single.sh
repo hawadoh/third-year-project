@@ -7,12 +7,29 @@ set -euo pipefail
 DATASET=$1
 SEED=$2
 
-# Paths
+# === PATH CONFIGURATION ===
+
+# ORIGINAL (data.zip in home directory):
+# WORKSPACE_DIR="/dcs/23/u5514611/cs310/self-proving-models"
+# DATA_ZIP="$WORKSPACE_DIR/data.zip"
+# MOUNT_POINT="$TMPDIR/spm_data_$$"
+# SPM_DIR="$WORKSPACE_DIR/spm"
+
+# NEW: Use /dcs/large/ for permanent storage (100GB allocation)
+DATADIR="/dcs/large/u5514611"
 WORKSPACE_DIR="/dcs/23/u5514611/cs310/self-proving-models"
-DATA_ZIP="$WORKSPACE_DIR/data.zip"
-# Use unique mount point per job to avoid conflicts
+DATA_ZIP="$DATADIR/data/data.zip"
 MOUNT_POINT="$TMPDIR/spm_data_$$"
 SPM_DIR="$WORKSPACE_DIR/spm"
+
+# Export paths for Python (spm/__init__.py reads these)
+export SPM_MODELS_DIR="$DATADIR/models"
+export SPM_ANALYSIS_DIR="$WORKSPACE_DIR/logs"  # Keep logs in repo
+export SPM_DATA_DIR="$WORKSPACE_DIR/data"      # Symlinks created here
+
+# Ensure output directories exist
+mkdir -p "$SPM_MODELS_DIR"
+mkdir -p "$SPM_ANALYSIS_DIR"
 
 echo "========================================="
 echo "Training: $DATASET (seed $SEED)"
@@ -60,40 +77,89 @@ ls -lh "$MOUNT_POINT/data" | head -5
 DATA_DIR="$WORKSPACE_DIR/data"
 mkdir -p "$DATA_DIR"
 
-# Create symlink for this specific dataset inside the data directory
-# (The Python code expects data at ROOT_DIR/data/<dataset_name>)
-DATASET_SYMLINK="$DATA_DIR/$DATASET"
+# ORIGINAL (simple symlink, assumes dataset always in data.zip):
+# DATASET_SYMLINK="$DATA_DIR/$DATASET"
+# if [ -L "$DATASET_SYMLINK" ]; then
+#     echo "Removing existing dataset symlink: $DATASET_SYMLINK"
+#     rm "$DATASET_SYMLINK" || unlink "$DATASET_SYMLINK" 2>/dev/null || true
+# elif [ -d "$DATASET_SYMLINK" ]; then
+#     echo "WARNING: $DATASET_SYMLINK exists as a directory. Removing it..."
+#     rm -rf "$DATASET_SYMLINK"
+# elif [ -e "$DATASET_SYMLINK" ]; then
+#     echo "Removing existing file: $DATASET_SYMLINK"
+#     rm -f "$DATASET_SYMLINK" || true
+# fi
+# echo "Creating dataset symlink: $DATASET_SYMLINK -> $MOUNT_POINT/data/$DATASET"
+# ln -sfn "$MOUNT_POINT/data/$DATASET" "$DATASET_SYMLINK"
 
-# Remove existing symlink/file for this dataset if it exists
-if [ -L "$DATASET_SYMLINK" ]; then
-    echo "Removing existing dataset symlink: $DATASET_SYMLINK"
-    rm "$DATASET_SYMLINK" || unlink "$DATASET_SYMLINK" 2>/dev/null || true
-elif [ -d "$DATASET_SYMLINK" ]; then
-    echo "WARNING: $DATASET_SYMLINK exists as a directory. Removing it..."
-    rm -rf "$DATASET_SYMLINK"
-elif [ -e "$DATASET_SYMLINK" ]; then
-    echo "Removing existing file: $DATASET_SYMLINK"
-    rm -f "$DATASET_SYMLINK" || true
+# NEW: Support datasets both in data.zip AND generated locally (e.g., uniform data)
+DATASET_PATH="$DATA_DIR/$DATASET"
+
+# Check if dataset exists in extracted zip
+if [ -d "$MOUNT_POINT/data/$DATASET" ]; then
+    echo "Dataset found in data.zip"
+    USE_SYMLINK=true
+    EXTRACTED_DATASET="$MOUNT_POINT/data/$DATASET"
+elif [ -d "$DATASET_PATH" ] && [ ! -L "$DATASET_PATH" ]; then
+    # Dataset exists as a real directory (e.g., uniform data generated locally)
+    echo "Dataset found in workspace: $DATASET_PATH"
+    echo "Using existing data directory (not from data.zip)"
+    USE_SYMLINK=false
+else
+    echo "ERROR: Dataset '$DATASET' not found in data.zip or workspace"
+    echo "  - Checked: $MOUNT_POINT/data/$DATASET"
+    echo "  - Checked: $DATASET_PATH"
+    echo ""
+    echo "For uniform datasets, generate training data first:"
+    echo "  python data-uniform/generate_uniform_data.py --n_train 10240000 --datasets $DATASET"
+    exit 1
 fi
 
-# Create symlink for this dataset (force replace if exists, no-dereference)
-echo "Creating dataset symlink: $DATASET_SYMLINK -> $MOUNT_POINT/data/$DATASET"
-ln -sfn "$MOUNT_POINT/data/$DATASET" "$DATASET_SYMLINK"
+# Create symlink only if using data from zip (not if data exists directly)
+if [ "$USE_SYMLINK" = true ]; then
+    # Remove existing symlink/file for this dataset if it exists
+    if [ -L "$DATASET_PATH" ]; then
+        echo "Removing existing dataset symlink: $DATASET_PATH"
+        rm "$DATASET_PATH" || unlink "$DATASET_PATH" 2>/dev/null || true
+    elif [ -d "$DATASET_PATH" ]; then
+        echo "WARNING: $DATASET_PATH exists as a directory but we need symlink. Skipping removal."
+        echo "Using existing directory instead of creating symlink."
+        USE_SYMLINK=false
+    elif [ -e "$DATASET_PATH" ]; then
+        echo "Removing existing file: $DATASET_PATH"
+        rm -f "$DATASET_PATH" || true
+    fi
+
+    if [ "$USE_SYMLINK" = true ]; then
+        echo "Creating dataset symlink: $DATASET_PATH -> $EXTRACTED_DATASET"
+        ln -sfn "$EXTRACTED_DATASET" "$DATASET_PATH"
+    fi
+fi
 
 # Trap to ensure cleanup on exit (success or failure)
+# ORIGINAL cleanup (always removes symlink):
+# cleanup() {
+#     echo "Cleaning up..."
+#     if [ -L "$DATASET_SYMLINK" ]; then
+#         echo "Removing dataset symlink: $DATASET_SYMLINK"
+#         rm "$DATASET_SYMLINK"
+#     fi
+#     echo "Removing extracted data from $MOUNT_POINT..."
+#     rm -rf "$MOUNT_POINT" 2>/dev/null || true
+# }
+
+# NEW cleanup (preserves real directories, only removes symlinks)
 cleanup() {
     echo "Cleaning up..."
-    # Remove dataset symlink
-    if [ -L "$DATASET_SYMLINK" ]; then
-        echo "Removing dataset symlink: $DATASET_SYMLINK"
-        rm "$DATASET_SYMLINK"
+    # Only remove if it's a symlink (not a real directory with uniform data)
+    if [ -L "$DATASET_PATH" ]; then
+        echo "Removing dataset symlink: $DATASET_PATH"
+        rm "$DATASET_PATH"
+    else
+        echo "Keeping dataset directory (not a symlink): $DATASET_PATH"
     fi
-    # ORIGINAL: Unmount fuse-zip
-    # echo "Unmounting $MOUNT_POINT..."
-    # fusermount3 -u "$MOUNT_POINT" || echo "Warning: unmount failed (may already be unmounted)"
-    # rmdir "$MOUNT_POINT" 2>/dev/null || true
 
-    # NEW: Remove extracted data from TMPDIR
+    # Remove extracted data from TMPDIR
     echo "Removing extracted data from $MOUNT_POINT..."
     rm -rf "$MOUNT_POINT" 2>/dev/null || true
 }

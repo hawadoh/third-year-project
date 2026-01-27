@@ -77,6 +77,27 @@ cd training/
 
 See `training/README.md` and `dcs-docs/` for detailed instructions on batch job submission.
 
+#### DCS Large Storage Setup
+
+If you have a large storage allocation (e.g., `/dcs/large/u5514611/`), set up as follows:
+
+```bash
+# Create directory structure on large storage
+mkdir -p /dcs/large/u5514611/data
+mkdir -p /dcs/large/u5514611/models
+
+# Copy training data to large storage
+cp data.zip /dcs/large/u5514611/data/
+```
+
+The training scripts (`training/train_single.sh`) automatically:
+- Read `data.zip` from `/dcs/large/u5514611/data/`
+- Save models to `/dcs/large/u5514611/models/`
+- Extract to `$TMPDIR` for fast I/O during training (35x faster than fuse-zip)
+- Keep training logs in the repository directory
+
+This setup avoids home directory quota issues while maintaining fast training performance.
+
 ### Reproduce Figure 2 (annotation length ablation)
 ```bash
 ./runs/annot_len.sh           # Train all annotation lengths
