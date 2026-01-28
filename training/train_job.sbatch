@@ -45,7 +45,7 @@ echo "Node: $SLURM_NODELIST"
 echo "================================================================"
 
 # Run training script
-cd /dcs/23/u5514611/cs310/self-proving-models/training
+cd /dcs/23/u5514611/cs310/third-year-project/training
 bash train_single.sh "$DATASET" "$SEED"
 
 echo "Task $SLURM_ARRAY_TASK_ID completed successfully"

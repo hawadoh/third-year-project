@@ -10,14 +10,14 @@ SEED=$2
 # === PATH CONFIGURATION ===
 
 # ORIGINAL (data.zip in home directory):
-# WORKSPACE_DIR="/dcs/23/u5514611/cs310/self-proving-models"
+# WORKSPACE_DIR="/dcs/23/u5514611/cs310/third-year-project"
 # DATA_ZIP="$WORKSPACE_DIR/data.zip"
 # MOUNT_POINT="$TMPDIR/spm_data_$$"
 # SPM_DIR="$WORKSPACE_DIR/spm"
 
 # NEW: Use /dcs/large/ for permanent storage (100GB allocation)
 DATADIR="/dcs/large/u5514611"
-WORKSPACE_DIR="/dcs/23/u5514611/cs310/self-proving-models"
+WORKSPACE_DIR="/dcs/23/u5514611/cs310/third-year-project"
 DATA_ZIP="$DATADIR/data/data.zip"
 MOUNT_POINT="$TMPDIR/spm_data_$$"
 SPM_DIR="$WORKSPACE_DIR/spm"
@@ -61,17 +61,23 @@ mkdir -p "$MOUNT_POINT"
 # echo "Mount successful. Data available at: $MOUNT_POINT/data"
 
 # NEW: Extract data.zip to TMPDIR for faster I/O (avoids FUSE overhead)
-echo "Extracting $DATA_ZIP to $MOUNT_POINT..."
-unzip -q "$DATA_ZIP" -d "$MOUNT_POINT"
+# Only extract if data.zip exists (uniform data is generated locally, not zipped)
+if [ -f "$DATA_ZIP" ]; then
+    echo "Extracting $DATA_ZIP to $MOUNT_POINT..."
+    unzip -q "$DATA_ZIP" -d "$MOUNT_POINT"
 
-# Verify extraction succeeded
-if [ ! -d "$MOUNT_POINT/data" ]; then
-    echo "ERROR: Extraction failed - data directory not found"
-    exit 1
+    # Verify extraction succeeded
+    if [ ! -d "$MOUNT_POINT/data" ]; then
+        echo "ERROR: Extraction failed - data directory not found"
+        exit 1
+    fi
+
+    echo "Extraction successful. Data available at: $MOUNT_POINT/data"
+    ls -lh "$MOUNT_POINT/data" | head -5
+else
+    echo "No data.zip found at $DATA_ZIP - will use local dataset if available"
+    mkdir -p "$MOUNT_POINT/data"
 fi
-
-echo "Extraction successful. Data available at: $MOUNT_POINT/data"
-ls -lh "$MOUNT_POINT/data" | head -5
 
 # Create data directory if it doesn't exist
 DATA_DIR="$WORKSPACE_DIR/data"
@@ -100,9 +106,12 @@ if [ -d "$MOUNT_POINT/data/$DATASET" ]; then
     echo "Dataset found in data.zip"
     USE_SYMLINK=true
     EXTRACTED_DATASET="$MOUNT_POINT/data/$DATASET"
-elif [ -d "$DATASET_PATH" ] && [ ! -L "$DATASET_PATH" ]; then
-    # Dataset exists as a real directory (e.g., uniform data generated locally)
+elif [ -d "$DATASET_PATH" ]; then
+    # Dataset exists in workspace (as directory or symlink to large storage)
     echo "Dataset found in workspace: $DATASET_PATH"
+    if [ -L "$DATASET_PATH" ]; then
+        echo "  (symlink to: $(readlink -f "$DATASET_PATH"))"
+    fi
     echo "Using existing data directory (not from data.zip)"
     USE_SYMLINK=false
 else
@@ -148,15 +157,16 @@ fi
 #     rm -rf "$MOUNT_POINT" 2>/dev/null || true
 # }
 
-# NEW cleanup (preserves real directories, only removes symlinks)
+# NEW cleanup (only removes symlinks created by this script for data.zip extraction)
 cleanup() {
     echo "Cleaning up..."
-    # Only remove if it's a symlink (not a real directory with uniform data)
-    if [ -L "$DATASET_PATH" ]; then
-        echo "Removing dataset symlink: $DATASET_PATH"
+    # Only remove symlink if we created it (USE_SYMLINK=true means data came from zip)
+    # Keep symlinks to large storage (USE_SYMLINK=false means pre-existing local data)
+    if [ "${USE_SYMLINK:-false}" = true ] && [ -L "$DATASET_PATH" ]; then
+        echo "Removing temporary dataset symlink: $DATASET_PATH"
         rm "$DATASET_PATH"
     else
-        echo "Keeping dataset directory (not a symlink): $DATASET_PATH"
+        echo "Keeping dataset (not a temporary symlink): $DATASET_PATH"
     fi
 
     # Remove extracted data from TMPDIR
@@ -175,12 +185,13 @@ GRAD_CLIP=2
 N_EMBD=256
 N_HEAD=8
 N_LAYER=8
-WANDB_PROJ="self-proving-models"
+WANDB_PROJ="third-year-project"
 EVAL_INTERVAL=10000  # Less frequent evaluation (was 2000)
 LOG_INTERVAL=1000    # Less frequent logging (was 100)
 
 # Build training command
 cd "$SPM_DIR"
+export PYTHONPATH="$WORKSPACE_DIR:${PYTHONPATH:-}"
 
 # Disable wandb to avoid authentication issues in batch jobs
 TRAIN_CMD="python train.py \
