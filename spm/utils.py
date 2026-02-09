@@ -25,7 +25,12 @@ def np_to_torch(arr: np.ndarray, device: str) -> Tensor:
 
 
 def log_save(path: Path):
-    logging.info(f"Saved {path.relative_to(ROOT_DIR)} size {human_readable_size(path)}")
+    try:
+        rel_path = path.relative_to(ROOT_DIR)
+    except ValueError:
+        # Path is outside ROOT_DIR (e.g., /dcs/large), use absolute path
+        rel_path = path
+    logging.info(f"Saved {rel_path} size {human_readable_size(path)}")
 
 
 def human_readable_size(path, decimal_places=2):
