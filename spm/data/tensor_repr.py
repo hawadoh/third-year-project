@@ -545,7 +545,14 @@ class TensorRepr:
         for i in range(len(as_list)):
             if start_col is not None and as_list[i] == self.toks[start_col]:
                 assert start is None, f"Found two {start_col} delimiters in {as_list}"
-                start = i
+                # Found the end delimiter for start_col
+                # Walk backwards to find the start delimiter
+                # Pattern: [start_delim (>=base), value_digits (<base), end_delim (>=base)]
+                pos = i - 1
+                while pos >= 0 and as_list[pos] < self.m.base:
+                    pos -= 1
+                assert pos >= 0, f"Could not find start delimiter for {start_col} before position {i}"
+                start = pos
             if as_list[i] == self.toks[end_col]:
                 assert start is not None, f"Found {end_col} delimiter before {start_col} in {as_list}"
                 end = i + 1
