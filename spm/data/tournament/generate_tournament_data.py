@@ -63,7 +63,7 @@ def set_seed(seed):
     random.seed(seed)
 
 
-def save_samples(train_samples, val_samples, name_prefix, args, n, all_only=False):
+def save_samples(train_samples, val_samples, name_prefix, args, n, dataset_type='ATL'):
     """Encode and save tournament samples with label compatibility fixes.
 
     Args:
@@ -72,7 +72,7 @@ def save_samples(train_samples, val_samples, name_prefix, args, n, all_only=Fals
         name_prefix: Prefix for dataset name (e.g., "Tournament_n4_TL")
         args: Command-line arguments (base, ubound, etc.)
         n: Number of inputs (4, 8, or 16)
-        all_only: If True, only save ANNOTATED_TRANSCRIPT variant (for Baseline)
+        dataset_type: 'Baseline', 'TL', or 'ATL' - determines which evaluation variants to save
     """
     # Create EncodedSamples
     train_encoded = EncodedSamples(train_samples, args.base)
@@ -95,11 +95,17 @@ def save_samples(train_samples, val_samples, name_prefix, args, n, all_only=Fals
     tr = TensorRepr.from_samples(train_encoded, val_encoded, name)
     tr.save_train()
 
-    # Save validation variants
-    # Note: TRANSCRIPT is n=2 specific (expects u,v), so we only save ANNOTATED_TRANSCRIPT and OUTPUT
-    val_cols = [TargetComponent.ANNOTATED_TRANSCRIPT]
-    if not all_only:
-        val_cols.append(TargetComponent.OUTPUT)
+    # Save validation variants based on dataset type
+    if dataset_type == 'Baseline':
+        # Baseline: only output (just k)
+        val_cols = [TargetComponent.OUTPUT]
+    elif dataset_type == 'TL':
+        # TL: transcript (k + coeffs) and output (just k)
+        val_cols = [TargetComponent.TRANSCRIPT, TargetComponent.OUTPUT]
+    else:  # ATL
+        # ATL: annotated (everything), transcript (k + coeffs), output (just k)
+        val_cols = [TargetComponent.ANNOTATED_TRANSCRIPT, TargetComponent.TRANSCRIPT, TargetComponent.OUTPUT]
+
     tr.save_val(val_cols)
 
 
@@ -127,7 +133,7 @@ def generate_baseline(args, n):
     set_seed(args.seed)
     train_samples = DisjointRejector(sampler, val_samples)(args.n_train)
 
-    save_samples(train_samples, val_samples, f"Tournament_n{n}_Baseline", args, n, all_only=True)
+    save_samples(train_samples, val_samples, f"Tournament_n{n}_Baseline", args, n, dataset_type='Baseline')
 
 
 def generate_tournament_transcripts(args, n):
@@ -154,7 +160,7 @@ def generate_tournament_transcripts(args, n):
     set_seed(args.seed)
     train_samples = DisjointRejector(sampler, val_samples)(args.n_train)
 
-    save_samples(train_samples, val_samples, f"Tournament_n{n}_TL", args, n)
+    save_samples(train_samples, val_samples, f"Tournament_n{n}_TL", args, n, dataset_type='TL')
 
 
 def generate_tournament_annotated(args, n):
@@ -182,7 +188,7 @@ def generate_tournament_annotated(args, n):
     set_seed(args.seed)
     train_samples = DisjointRejector(sampler, val_samples)(args.n_train)
 
-    save_samples(train_samples, val_samples, f"Tournament_n{n}_ATL", args, n)
+    save_samples(train_samples, val_samples, f"Tournament_n{n}_ATL", args, n, dataset_type='ATL')
 
 
 if __name__ == "__main__":

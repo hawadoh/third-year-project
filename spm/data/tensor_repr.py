@@ -384,13 +384,44 @@ class TensorRepr:
                 all_mask[: len(target_short)] = 1
                 masks[TargetComponent.ANNOTATED_TRANSCRIPT] = all_mask
             elif col == TargetComponent.TRANSCRIPT:
-                assert (
-                    Labels.u() in self.m.target_labels and Labels.v() in self.m.target_labels
-                ), "transcript (u,v) specified, but u or v not in target_cols"
-                masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=Labels.u(), end_col=Labels.v())
-                masks[TargetComponent.TRANSCRIPT] += self.make_mask(target, start_col=None, end_col=Labels.k)
+                # TRANSCRIPT includes k and Bézout coefficients (but not annotations)
+                # For n=2 TL: k, u, v
+                # For tournament TL: k, c1, c2, ..., cn
+                # For tournament ATL: skip annotations, then k, c1, c2, ..., cn
+
+                # Find Bézout coefficient labels (u,v for n=2, or c1,c2,... for tournament)
+                coeff_labels = [lbl for lbl in self.m.target_labels if lbl.startswith('c') or lbl in [Labels.u(), Labels.v()]]
+
+                # Check if there are annotation labels before k
+                k_idx = self.m.target_labels.index(Labels.k) if Labels.k in self.m.target_labels else 0
+                has_annotations_before_k = k_idx > 0 and any(
+                    lbl.startswith('g') or lbl.startswith('u') or lbl.startswith('v')
+                    for lbl in self.m.target_labels[:k_idx]
+                    if lbl != Labels.u() and lbl != Labels.v()  # Exclude actual Bézout u,v
+                )
+
+                # Determine start position
+                start_col = Labels.k if has_annotations_before_k else None
+
+                if coeff_labels:
+                    # Create mask from k (or beginning) to last coefficient
+                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=start_col, end_col=coeff_labels[-1])
+                else:
+                    # No coefficients, just mask k
+                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=start_col, end_col=Labels.k)
             elif col == TargetComponent.OUTPUT:
-                masks[TargetComponent.OUTPUT] = self.make_mask(target, start_col=None, end_col=Labels.k)
+                # OUTPUT checks only k (not annotations or coefficients)
+                # For datasets without annotations (Baseline, TL), start_col=None works fine
+                # For datasets with annotations (ATL), we need to start from k to skip annotations
+                # Check if we have annotation labels before k in target_labels
+                k_idx = self.m.target_labels.index(Labels.k) if Labels.k in self.m.target_labels else -1
+                has_annotations_before_k = k_idx > 0 and any(
+                    lbl.startswith('g') or lbl.startswith('u') or lbl.startswith('v')
+                    for lbl in self.m.target_labels[:k_idx]
+                    if lbl != Labels.u() and lbl != Labels.v()  # Exclude actual Bézout u,v
+                )
+                start_col = Labels.k if has_annotations_before_k else None
+                masks[TargetComponent.OUTPUT] = self.make_mask(target, start_col=start_col, end_col=Labels.k)
             else:
                 raise ValueError(f"For now, {col} is not a valid val column.")
         return inp, target, masks
