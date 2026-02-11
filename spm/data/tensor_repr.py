@@ -387,28 +387,50 @@ class TensorRepr:
                 # TRANSCRIPT includes k and Bézout coefficients (but not annotations)
                 # For n=2 TL: k, u, v
                 # For tournament TL: k, c1, c2, ..., cn
-                # For tournament ATL: skip annotations, then k, c1, c2, ..., cn
+                # For n=2 ATL: k, [annotations], u, v
+                # For tournament ATL: k, [annotations], c1, c2, ..., cn
 
                 # Find Bézout coefficient labels (u,v for n=2, or c1,c2,... for tournament)
                 coeff_labels = [lbl for lbl in self.m.target_labels if lbl.startswith('c') or lbl in [Labels.u(), Labels.v()]]
 
-                # Check if there are annotation labels before k
+                # Find k index and check for annotations
                 k_idx = self.m.target_labels.index(Labels.k) if Labels.k in self.m.target_labels else 0
-                has_annotations_before_k = k_idx > 0 and any(
-                    lbl.startswith('g') or lbl.startswith('u') or lbl.startswith('v')
-                    for lbl in self.m.target_labels[:k_idx]
-                    if lbl != Labels.u() and lbl != Labels.v()  # Exclude actual Bézout u,v
-                )
 
-                # Determine start position
-                start_col = Labels.k if has_annotations_before_k else None
+                # Check for tournament annotation labels (g0_0, u0_0, v0_0, etc.) or n=2 annotation labels (u0, v0, q0, etc.)
+                # These are distinct from the final Bézout coefficients (u, v for n=2, or c1, c2, ... for tournament)
+                def is_annotation_label(lbl):
+                    # Annotation labels have format: g0_0, u0_1, v1_0 (tournament) or u0, v0, q0 (n=2 intermediate steps)
+                    if lbl == Labels.u() or lbl == Labels.v():  # Final Bézout coefficients
+                        return False
+                    if lbl.startswith('c'):  # Tournament final coefficients
+                        return False
+                    if lbl.startswith('g') or ('_' in lbl) or (len(lbl) == 2 and lbl[0] in 'uvq' and lbl[1].isdigit()):
+                        return True
+                    return False
 
-                if coeff_labels:
-                    # Create mask from k (or beginning) to last coefficient
-                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=start_col, end_col=coeff_labels[-1])
+                # Check if annotations exist anywhere in target labels
+                has_annotations = any(is_annotation_label(lbl) for lbl in self.m.target_labels)
+
+                if has_annotations and coeff_labels:
+                    # Case: ATL with annotations between k and coefficients
+                    # Strategy: Create mask for k + coefficients, then zero out annotation positions
+                    # Start from k, end at last coefficient (this includes annotations in between)
+                    transcript_mask = self.make_mask(target, start_col=Labels.k, end_col=coeff_labels[-1])
+
+                    # Zero out annotation positions by creating masks for each annotation and subtracting
+                    annotation_labels = [lbl for lbl in self.m.target_labels if is_annotation_label(lbl)]
+                    for ann_lbl in annotation_labels:
+                        ann_mask = self.make_mask(target, start_col=ann_lbl, end_col=ann_lbl)
+                        transcript_mask = transcript_mask * (1 - ann_mask)  # Zero out this annotation
+
+                    masks[TargetComponent.TRANSCRIPT] = transcript_mask
+                elif coeff_labels:
+                    # Case: TL or Baseline with coefficients, no annotations
+                    # Simple mask from k (or beginning) to last coefficient
+                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=None, end_col=coeff_labels[-1])
                 else:
                     # No coefficients, just mask k
-                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=start_col, end_col=Labels.k)
+                    masks[TargetComponent.TRANSCRIPT] = self.make_mask(target, start_col=None, end_col=Labels.k)
             elif col == TargetComponent.OUTPUT:
                 # OUTPUT checks only k (not annotations or coefficients)
                 # For datasets without annotations (Baseline, TL), start_col=None works fine
