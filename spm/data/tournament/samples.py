@@ -152,7 +152,9 @@ class TournamentAnnotatedTranscript(TournamentTranscript):
         """
         Convert to dictionary with annotations.
 
-        Order: x1, ..., xn, [round 0 annotations], [round 1 annotations], ..., k, c1, ..., cn
+        Order (targets): k, [annotations], c1, ..., cn
+        This matches n=2 ATL pattern where the answer (k) comes first,
+        followed by the proof (annotations), then final coefficients.
 
         Round r annotations: g_r_0, u_r_0, v_r_0, g_r_1, u_r_1, v_r_1, ...
         """
@@ -162,7 +164,10 @@ class TournamentAnnotatedTranscript(TournamentTranscript):
         for i in range(self.n):
             d[TournamentLabels.x(i + 1)] = self.inputs[:, i]
 
-        # Annotations per round
+        # k first - answer before proof (consistent with n=2 ATL)
+        d[TournamentLabels.k] = self.k
+
+        # Annotations per round (the proof)
         for r in range(self.num_rounds):
             num_pairs = self.n // (2 ** (r + 1))
             for p in range(num_pairs):
@@ -170,8 +175,7 @@ class TournamentAnnotatedTranscript(TournamentTranscript):
                 d[TournamentLabels.u(r, p)] = self.round_u[r][:, p]
                 d[TournamentLabels.v(r, p)] = self.round_v[r][:, p]
 
-        # Final outputs
-        d[TournamentLabels.k] = self.k
+        # Final coefficients
         for i in range(self.n):
             d[TournamentLabels.c(i + 1)] = self.coeffs[:, i]
 
