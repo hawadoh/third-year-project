@@ -66,7 +66,7 @@ def save_samples(train_samples, val_samples, name: str, n: int):
 def generate_optionb(args, n: int):
     """Generate Option B ATL dataset for n inputs."""
     logging.info(f"Generating Option B ATL for n={n}, T={args.T}")
-    sampler = TournamentOptionBSampler(n=n, ubound=args.ubound, T=args.T, base=args.base)
+    sampler = TournamentOptionBSampler(n=n, ubound=args.ubound, T=args.T, base=args.base, p_biased=args.p_biased)
 
     logging.info("Generating validation samples")
     set_seed(args.seed)
@@ -78,7 +78,8 @@ def generate_optionb(args, n: int):
 
     n_str = f"{len(train_samples):.0e}".replace("e+0", "e")
     ubound_str = f"{args.ubound:.0e}".replace("e+0", "e")
-    name = f"Tournament_n{n}_ATL_B_T{args.T}_{ubound_str}_m{n_str}_b{args.base}"
+    bias_str = f"_p{args.p_biased}" if args.p_biased > 0 else ""
+    name = f"Tournament_n{n}_ATL_B_T{args.T}_{ubound_str}_m{n_str}_b{args.base}{bias_str}"
 
     save_samples(train_samples, val_samples, name, n)
 
@@ -91,6 +92,7 @@ if __name__ == "__main__":
     parser.add_argument("--base", type=int, default=210, help="Base for integer representation")
     parser.add_argument("--T", type=int, default=6, help="Euclidean trace steps per pair (default 6)")
     parser.add_argument("--seed", type=int, default=67, help="Random seed")
+    parser.add_argument("--p_biased", type=float, default=0.0, help="Fraction of samples with k sampled first (0=natural only, 0.5=50/50)")
     parser.add_argument(
         "--n_values",
         type=int,
