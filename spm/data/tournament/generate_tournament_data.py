@@ -89,7 +89,8 @@ def save_samples(train_samples, val_samples, name_prefix, args, n, dataset_type=
     # Create name and save
     n_samples_str = f"{len(train_samples):.0e}".replace("e+0", "e")
     ubound_str = f"{args.ubound:.0e}".replace("e+0", "e")
-    name = f"{name_prefix}_{ubound_str}_m{n_samples_str}_b{args.base}"
+    bias_str = f"_p{args.p_biased}" if args.p_biased > 0 else ""
+    name = f"{name_prefix}_{ubound_str}_m{n_samples_str}_b{args.base}{bias_str}"
 
     logging.info(f"Saving dataset: {name}")
     tr = TensorRepr.from_samples(train_encoded, val_encoded, name)
@@ -123,7 +124,7 @@ def generate_baseline(args, n):
         n: Number of inputs (4, 8, or 16)
     """
     logging.info(f"Generating Baseline for n={n}")
-    sampler = LogUniformTournamentGCDSampler(n, args.ubound)
+    sampler = LogUniformTournamentGCDSampler(n, args.ubound, p_biased=args.p_biased)
 
     logging.info("Generating validation samples")
     set_seed(args.seed)
@@ -150,7 +151,7 @@ def generate_tournament_transcripts(args, n):
         n: Number of inputs (4, 8, or 16)
     """
     logging.info(f"Generating TL (Transcript Learning) for n={n}")
-    sampler = TournamentTranscriptSampler(LogUniformTournamentGCDSampler(n, args.ubound))
+    sampler = TournamentTranscriptSampler(LogUniformTournamentGCDSampler(n, args.ubound, p_biased=args.p_biased))
 
     logging.info("Generating validation samples")
     set_seed(args.seed)
@@ -178,7 +179,7 @@ def generate_tournament_annotated(args, n):
         n: Number of inputs (4, 8, or 16)
     """
     logging.info(f"Generating ATL (Annotated Transcript Learning) for n={n}")
-    sampler = TournamentAnnotatedTranscriptSampler(LogUniformTournamentGCDSampler(n, args.ubound))
+    sampler = TournamentAnnotatedTranscriptSampler(LogUniformTournamentGCDSampler(n, args.ubound, p_biased=args.p_biased))
 
     logging.info("Generating validation samples")
     set_seed(args.seed)
@@ -198,6 +199,7 @@ if __name__ == "__main__":
     parser.add_argument("--ubound", type=int, default=10**4, help="Upper bound for input integers")
     parser.add_argument("--base", type=int, default=210, help="Base for integer representation")
     parser.add_argument("--seed", type=int, default=67, help="Random seed (default: 67 for tournament)")
+    parser.add_argument("--p_biased", type=float, default=0.0, help="Fraction of samples with k sampled first (0=natural only, 0.5=50/50)")
     parser.add_argument(
         "--n_values",
         type=int,
