@@ -57,6 +57,7 @@ def make_parser() -> tuple[argparse.ArgumentParser, ArgumentGroup, ArgumentGroup
         help="Clip gradients at this value, or disable if == 0.0",
     )
     config_group.add_argument("--batch_size", type=int, help="Training batch size")
+    config_group.add_argument("--grad_accum_steps", type=int, help="Gradient accumulation steps")
     config_group.add_argument("--learning_rate", type=float, help="Max learning rate")
     config_group.add_argument("--weight_decay", type=float, help="Weight decay")
     config_group.add_argument("--beta1", type=float, help="Adam beta1")

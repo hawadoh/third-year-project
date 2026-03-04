@@ -29,6 +29,7 @@ DEFAULTS = {
     "decay_lr": 0,
     "warmup_iters": 2000,
     "grad_clip": 1.0,
+    "grad_accum_steps": 1,
     "epochs": 1000,
     "compile": True,
     "learning_rate": 6e-4,
@@ -72,6 +73,7 @@ class TrainerConfig:
     min_lr: float = field(init=False)  # set to be learning_rate / decay_lr
     warmup_iters: int  # 2000  # how many steps to warm up for
     grad_clip: float  # 1.0  # clip gradients at this value, or disable if == 0.0
+    grad_accum_steps: int  # 1  # number of gradient accumulation steps
 
     compile: bool  # True  # use PyTorch 2.0 to compile the model to be faster
 
@@ -143,7 +145,7 @@ class TrainerConfig:
         return f"{name}-rlvf" if self.rlvf else name
 
     def iter_to_epoch(self, it: int) -> float:
-        return it * self.batch_size / self.num_samples
+        return it * self.batch_size * self.grad_accum_steps / self.num_samples
 
     def epoch_to_iter(self, epoch: float) -> int:
-        return int(epoch * self.num_samples / self.batch_size)
+        return int(epoch * self.num_samples / (self.batch_size * self.grad_accum_steps))

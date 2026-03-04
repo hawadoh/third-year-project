@@ -214,13 +214,13 @@ class Trainer:
             if self.cfg.save_iters is not None and self.iter_num in self.cfg.save_iters:
                 self.save_checkpoint()
 
-            # forward backward update, using the GradScaler if data type is float16
-            with self.ctx:
-                logits, loss = self.model(X, Y)
-            # immediately async prefetch next batch while model is doing the forward pass on the GPU
-            X, Y = self.data.get_train_batch(self.cfg.batch_size, device=self.device_type)
-            # backward pass, with gradient scaling if training in fp16
-            self.scaler.scale(loss).backward()
+            # forward backward update, with gradient accumulation
+            for micro_step in range(self.cfg.grad_accum_steps):
+                with self.ctx:
+                    logits, loss = self.model(X, Y)
+                    loss = loss / self.cfg.grad_accum_steps
+                X, Y = self.data.get_train_batch(self.cfg.batch_size, device=self.device_type)
+                self.scaler.scale(loss).backward()
             # clip the gradient
             if self.cfg.grad_clip != 0.0:
                 self.scaler.unscale_(self.optimizer)

@@ -179,7 +179,7 @@ trap cleanup EXIT
 EPOCHS=10
 BETA1=0.733
 LR=0.0007
-BATCH_SIZE=1024
+BATCH_SIZE=${SPM_BATCH_SIZE:-1024}
 DECAY_LR=10
 GRAD_CLIP=2
 N_EMBD=256
@@ -211,7 +211,8 @@ TRAIN_CMD="python train.py \
     --n_head=$N_HEAD \
     --n_layer=$N_LAYER \
     --seed=$SEED \
-    --data=$DATASET"
+    --data=$DATASET \
+    --grad_accum_steps=${SPM_GRAD_ACCUM_STEPS:-1}"
 
 # Save model checkpoints if seed is 0
 # # OLD: Save every epochs (10000 iters) + final checkpoint
