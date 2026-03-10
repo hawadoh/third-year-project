@@ -104,7 +104,8 @@ class Trainer:
 
     def initialize_model(self):
         if self.cfg.load_ckpt is not None:
-            ckpt_path = (MODELS_DIR / self.cfg.load_ckpt).with_suffix(".pt")
+            name = self.cfg.load_ckpt if self.cfg.load_ckpt.endswith(".pt") else self.cfg.load_ckpt + ".pt"
+            ckpt_path = MODELS_DIR / name
             logging.info(f"loading model from {ckpt_path}")
             if not ckpt_path.exists():
                 raise FileNotFoundError(f"Checkpoint {ckpt_path} not found.")
@@ -121,7 +122,7 @@ class Trainer:
                 if k.startswith(unwanted_prefix):
                     state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
             self.model.load_state_dict(ckpt["model"])
-            # self.iter_num = ckpt["iter_num"]  # Let's start from 0
+            self.iter_num = ckpt["iter_num"]
         else:
             self.model = GPT(self.cfg)
         logging.info(f"initialized model with config {self.cfg}")

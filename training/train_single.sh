@@ -214,12 +214,17 @@ TRAIN_CMD="python train.py \
     --data=$DATASET \
     --grad_accum_steps=${SPM_GRAD_ACCUM_STEPS:-1}"
 
+# Load from checkpoint if specified
+if [ -n "$SPM_LOAD_CKPT" ]; then
+    TRAIN_CMD="$TRAIN_CMD --load_ckpt=$SPM_LOAD_CKPT"
+fi
+
 # Save model checkpoints if seed is 0
 # # OLD: Save every epochs (10000 iters) + final checkpoint
 # With max_iters=100000 and 10 epochs, each epoch ≈ 10000 iters
 if [ "$SEED" -eq 0 ]; then
     # TRAIN_CMD="$TRAIN_CMD --save_iters 10000 20000 30000 40000 50000 60000 70000 80000 90000 -1"
-    TRAIN_CMD="$TRAIN_CMD --save_iters -1"
+    TRAIN_CMD="$TRAIN_CMD --save_iters ${SPM_SAVE_ITERS:--1}"
 fi
 
 echo "Starting training..."
